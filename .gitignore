@@ -1,0 +1,10 @@
+*
+!.gitignore
+!autocrop.py
+!main.py
+!orientation_model_v2_0.9882.onnx
+!orientation_detection/
+orientation_detection/*
+!orientation_detection/predict_onnx.py
+!orientation_detection/config.py
+!orientation_detection/src/
