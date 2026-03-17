@@ -8,4 +8,4 @@ orientation_detection/*
 !orientation_detection/predict_onnx.py
 !orientation_detection/config.py
 !orientation_detection/src/
-!orientation_detection/src/*
+!orientation_detection/src/**
