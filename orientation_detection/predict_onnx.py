@@ -213,29 +213,3 @@ def main(args_list=None):  # <--- 1. Wrap it in a function with the 'valve'
 
 if __name__ == "__main__":
     main()
-
-# if __name__ == "__main__":
-#     parser = argparse.ArgumentParser(
-#         description="Predict image orientation using an ONNX model."
-#     )
-#     parser.add_argument(
-#         "--input_path",
-#         type=str,
-#         required=True,
-#         help="Path to an image file or a directory of images.",
-#     )
-#     parser.add_argument(
-#         "--model_path",
-#         type=str,
-#         default=os.path.join(config.MODEL_SAVE_DIR, f"{config.MODEL_NAME}.onnx"),
-#         help="Path to the ONNX model file.",
-#     )
-#     parser.add_argument(
-#         "--output_path",
-#         type=str,
-#         default="rotated",
-#         help="Path to the ONNX model file.",
-#     )
-#
-#     args = parser.parse_args()
-#     run_prediction_onnx(args)
