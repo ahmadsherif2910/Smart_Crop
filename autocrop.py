@@ -18,9 +18,6 @@ from pathlib import Path
 #
 # four_point_transform calls order_rect (to sort the corners).
 
-
-RATIO = 2.0
-
 def order_rect(points):
     # initialize result -> rectangle coordinates (4 corners, 2 coordinates (x,y))
     res = np.zeros((4, 2), dtype=np.float32)
@@ -48,7 +45,7 @@ def four_point_transform(img, points):
 
     # compute the width of the new image, which will be the
     # maximum distance between bottom-right and bottom-left
-    # x-coordiates or the top-right and top-left x-coordinates
+    # x-coordinates or the top-right and top-left x-coordinates
     widthA = np.sqrt(((br[0] - bl[0]) ** 2) + ((br[1] - bl[1]) ** 2))
     widthB = np.sqrt(((tr[0] - tl[0]) ** 2) + ((tr[1] - tl[1]) ** 2))
     maxWidth = max(int(widthA), int(widthB))
@@ -72,19 +69,26 @@ def four_point_transform(img, points):
     # return the warped image
     return warped
 
-def cont(img, gray, user_thresh, crop, filename):
-
+def cont(img, gray, user_thresh, crop, filename,target_area = 1000000):
     im_h, im_w = img.shape[:2]
     im_area = im_w * im_h
 
-    Blur = cv2.GaussianBlur(gray,(5,5),1) #apply blur to roi
+    if im_area > target_area:
+        scale = np.sqrt(target_area / im_area)
+    else:
+        scale = 1.0
 
-    # TODO Always resize to the same size (instead of using a constant ratio)
-    res_gray = cv2.resize(Blur,(int(im_w/RATIO), int(im_h/RATIO)), interpolation = cv2.INTER_CUBIC)
+    new_w = int(im_w * scale)
+    new_h = int(im_h * scale)
+
+    blur = cv2.GaussianBlur(gray,(5,5),1) #apply blur to roi
+
+    res_gray = cv2.resize(blur,(new_w,new_h), interpolation = cv2.INTER_AREA)
 
     factor = 0.07
     prev_user_thresh = set()
-    while user_thresh > 0 and user_thresh <= 255:
+
+    while 0<user_thresh<255:
         prev_user_thresh.add(user_thresh)
         print(f"Detect with threshold: {user_thresh}")
 
@@ -93,26 +97,28 @@ def cont(img, gray, user_thresh, crop, filename):
 
         large_contours = 0
         kept_contours = []
-        thres_incr = 0
+        thresh_inc = 0
 
         for cnt in contours:
             # Resize the image for the detection
-            cnt[:, :, 0] = cnt[:, :, 0] * RATIO
-            cnt[:, :, 1] = cnt[:, :,  1] * RATIO
+            cnt[:, :, 0] = cnt[:, :, 0] /scale
+            cnt[:, :, 1] = cnt[:, :,  1] /scale
+
             area = cv2.contourArea(cnt)
             if (im_area / 100) < area < (im_area / 1.01):
                 large_contours += 1
 
                 epsilon = factor * cv2.arcLength(cnt,True)
                 approx = cv2.approxPolyDP(cnt, epsilon, True)
+
                 print(f"len(approx): {len(approx)}")
                 if len(approx) == 4:
                     print(f"Found an image !")
                     kept_contours.append(approx)
                 elif len(approx) > 4:
-                    thres_incr -= 1
+                    thresh_inc -= 1
                 elif len(approx) < 4:
-                    thres_incr += 1
+                    thresh_inc += 1
 
         print(f"Contours {len(contours)} with {large_contours} large and {len(kept_contours)} images found. "
               f"Factor: {factor}. "
@@ -120,24 +126,18 @@ def cont(img, gray, user_thresh, crop, filename):
 
         if large_contours == len(kept_contours):
             break
-        elif thres_incr == 0:
+        elif thresh_inc == 0:
             print("WARNING: This seems to be an edge case.")
-            factor = factor + 0.01
+            factor += 0.01
         else:
-            user_thresh += thres_incr
+            user_thresh += thresh_inc
         if user_thresh in prev_user_thresh:
             print("WARNING: This seems to be an edge case (reusing user_thresh).")
-            factor = factor + 0.01
+            factor += 0.01
 
     found_images = []
-
     for approx in kept_contours:
-
-        rect = np.zeros((4, 2), dtype = np.float32)
-        rect[0] = approx[0]
-        rect[1] = approx[1]
-        rect[2] = approx[2]
-        rect[3] = approx[3]
+        rect = approx.reshape(4, 2).astype(np.float32)
 
         dst = four_point_transform(img, rect)
 
@@ -199,6 +199,74 @@ def autocrop(params):
 def invert(img):
     return ~img
 
+def run_crop(input_path=".", output_path="crop/",rotate=0, threshold=200, crop=0, black_bg=False,quality=92, threads=None):
+    # Convert both to objects immediately
+    input_path = Path(input_path)
+    output_path = Path(output_path)
+
+    single = True if input_path.is_file() else False
+
+    # Determine the base directory
+    base_dir = input_path if input_path.is_dir() else input_path.parent
+
+    output_path = base_dir/output_path if not output_path.is_absolute() else output_path
+
+    output_path.mkdir(parents=True, exist_ok=True)
+    print(f"Working with: {output_path.as_posix()}")
+
+    match rotate:
+        case 180:
+            rotation = cv2.ROTATE_180
+        case 90:
+            rotation = cv2.ROTATE_90_CLOCKWISE
+        case -90:
+            rotation = cv2.ROTATE_90_COUNTERCLOCKWISE
+        case 0:
+            rotation = None
+        case _:
+            print("Invalid rotation value")
+            return
+
+    if quality < 0 or quality > 100:
+        print("Invalid JPEG quality")
+        return
+
+    folder = Path(input_path)
+
+    if not single:
+        # Extensions we want to look for
+        extensions = {'.bmp', '.tiff', '.tif', '.jpg', '.jpeg', '.png'}
+
+        # List comprehension:
+        # 1. Iterate over all files in the folder (folder.iterdir())
+        # 2. Check if the file's suffix (in lowercase) is in our set
+        files = [str(f) for f in folder.iterdir() if f.suffix.lower() in extensions]
+    else:
+        files = [input_path]
+
+    files.sort()
+
+    if len(files) == 0:
+        print(f"No image files found in {input_path}\n Exiting.")
+    else:
+        threads =  threads or os.cpu_count() or 1
+        print(f"Using {threads} threads")
+
+        params = []
+        for f in files:
+            params.append({
+                            "out_path": output_path,
+                            "rotation": rotation,
+                            "thresh": threshold,
+                            "crop": crop,
+                            "black": black_bg,
+                            "quality": quality,
+                            "filename": f,
+            })
+
+        with Pool(threads) as p:
+            _ = p.map(autocrop, params)
+
 def main(args_list = None):
     parser = argparse.ArgumentParser(description = "Crop/Rotate images automatically. Images should be large enough on white background.")
     parser.add_argument("-i", metavar="INPUT_PATH", default=".",
@@ -226,8 +294,8 @@ def main(args_list = None):
                         help="Process single image. i.e.: -i img.jpg -o crop/")
     args = parser.parse_args(args_list)
 
-    in_path = pathlib.PureWindowsPath(args.i).as_posix() # since windows understands posix too: let's convert it to a posix path.
-    out_path = pathlib.PureWindowsPath(args.o).as_posix() # (works on all systems and conveniently also removes additional '/' on posix systems)
+    in_path = pathlib.Path(args.i).as_posix() # since windows understands posix too: let's convert it to a posix path.
+    out_path = pathlib.Path(args.o).as_posix() # (works on all systems and conveniently also removes additional '/' on posix systems)
 
     thresh = args.t
     crop = args.c
@@ -244,7 +312,7 @@ def main(args_list = None):
         case 0:
             rotation = None
         case _:
-            print("Invalid roation")
+            print("Invalid rotation value")
             return
     quality = args.quality
     if quality < 0 or quality > 100:
@@ -260,7 +328,7 @@ def main(args_list = None):
         types = ('*.bmp','*.BMP','*.tiff','*.TIFF','*.tif','*.TIF','*.jpg', '*.JPG','*.JPEG', '*.jpeg', '*.png', '*.PNG') #all should work but only .jpg was tested
 
         for t in types:
-            if glob.glob(f"{in_path}/{t}") != []:
+            if glob.glob(f"{in_path}/{t}"):
                 f_l = glob.glob(f"{in_path}/{t}")
                 for f in f_l:
                     files.append(f)
@@ -272,7 +340,7 @@ def main(args_list = None):
     if len(files) == 0:
         print(f"No image files found in {in_path}\n Exiting.")
     else:
-        if num_threads == None:
+        if num_threads is None:
             try:
                 num_threads = len(os.sched_getaffinity(0))
                 print(f"Using {num_threads} threads.")
@@ -292,7 +360,8 @@ def main(args_list = None):
                             "quality": quality})
 
         with Pool(num_threads) as p:
-            results = p.map(autocrop, params)
+            _ = p.map(autocrop, params)
 
 if __name__ == "__main__":
-    main()
+    # main()
+    run_crop(input_path="pics/Sample_2_original.jpg",black_bg=True)
