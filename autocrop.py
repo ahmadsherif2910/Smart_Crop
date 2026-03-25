@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 import argparse
-import os, glob, pathlib
+import os
 from multiprocessing import Pool
 from pathlib import Path
 
@@ -46,25 +46,25 @@ def four_point_transform(img, points):
     # compute the width of the new image, which will be the
     # maximum distance between bottom-right and bottom-left
     # x-coordinates or the top-right and top-left x-coordinates
-    widthA = np.sqrt(((br[0] - bl[0]) ** 2) + ((br[1] - bl[1]) ** 2))
-    widthB = np.sqrt(((tr[0] - tl[0]) ** 2) + ((tr[1] - tl[1]) ** 2))
-    maxWidth = max(int(widthA), int(widthB))
+    width_a = np.sqrt(((br[0] - bl[0]) ** 2) + ((br[1] - bl[1]) ** 2))
+    width_b = np.sqrt(((tr[0] - tl[0]) ** 2) + ((tr[1] - tl[1]) ** 2))
+    max_width = max(int(width_a), int(width_b))
 
     # compute the height of the new image, which will be the
     # maximum distance between the top-right and bottom-right
     # y-coordinates or the top-left and bottom-left y-coordinates
-    heightA = np.sqrt(((tr[0] - br[0]) ** 2) + ((tr[1] - br[1]) ** 2))
-    heightB = np.sqrt(((tl[0] - bl[0]) ** 2) + ((tl[1] - bl[1]) ** 2))
-    maxHeight = max(int(heightA), int(heightB))
+    height_a = np.sqrt(((tr[0] - br[0]) ** 2) + ((tr[1] - br[1]) ** 2))
+    height_b = np.sqrt(((tl[0] - bl[0]) ** 2) + ((tl[1] - bl[1]) ** 2))
+    max_height = max(int(height_a), int(height_b))
 
     dst = np.array([[0, 0],
-                    [maxWidth - 1, 0],
-                    [maxWidth - 1, maxHeight - 1],
-                    [0, maxHeight - 1]], dtype = np.float32)
+                    [max_width - 1, 0],
+                    [max_width - 1, max_height - 1],
+                    [0, max_height - 1]], dtype = np.float32)
 
     # compute the perspective transform matrix and then apply it
-    M = cv2.getPerspectiveTransform(rect, dst)
-    warped = cv2.warpPerspective(img, M, (maxWidth, maxHeight))
+    m = cv2.getPerspectiveTransform(rect, dst)
+    warped = cv2.warpPerspective(img, m, (max_width, max_height))
 
     # return the warped image
     return warped
@@ -267,8 +267,9 @@ def run_crop(input_path=".", output_path="crop/",rotate=0, threshold=200, crop=0
         with Pool(threads) as p:
             _ = p.map(autocrop, params)
 
-def main(args_list = None):
-    parser = argparse.ArgumentParser(description = "Crop/Rotate images automatically. Images should be large enough on white background.")
+def pass_args(args_list = None):
+    parser = argparse.ArgumentParser(
+        description="Crop/Rotate images automatically. Images should be large enough on white background.")
     parser.add_argument("-i", metavar="INPUT_PATH", default=".",
                         help="Input path. Specify the folder containing the images you want be processed.")
     parser.add_argument("-o", metavar="OUTPUT_PATH", default="crop/",
@@ -290,78 +291,11 @@ def main(args_list = None):
                         help="Specify the number of threads to be used to process the images in parallel. \
                                 If not provided, the script will try to find the value itself \
                                 (which doesn't work on Windows or MacOS -> defaults to 1 thread only).")
-    parser.add_argument("-s", "--single", action="store_true",
-                        help="Process single image. i.e.: -i img.jpg -o crop/")
+
     args = parser.parse_args(args_list)
 
-    in_path = pathlib.Path(args.i).as_posix() # since windows understands posix too: let's convert it to a posix path.
-    out_path = pathlib.Path(args.o).as_posix() # (works on all systems and conveniently also removes additional '/' on posix systems)
+    run_crop(input_path=args.i, output_path=args.o,rotate=args.r, threshold=args.t, crop=args.c, black_bg=args.black,quality=args.quality, threads=args.p)
 
-    thresh = args.t
-    crop = args.c
-    num_threads = args.p
-    single = args.single
-    black = args.black
-    match args.r:
-        case 180:
-            rotation = cv2.ROTATE_180
-        case 90:
-            rotation = cv2.ROTATE_90_CLOCKWISE
-        case -90:
-            rotation = cv2.ROTATE_90_COUNTERCLOCKWISE
-        case 0:
-            rotation = None
-        case _:
-            print("Invalid rotation value")
-            return
-    quality = args.quality
-    if quality < 0 or quality > 100:
-        print("Invalid JPEG quality")
-        return
-
-    if not os.path.exists(out_path):
-        os.makedirs(out_path)
-
-    files = []
-
-    if not single:
-        types = ('*.bmp','*.BMP','*.tiff','*.TIFF','*.tif','*.TIF','*.jpg', '*.JPG','*.JPEG', '*.jpeg', '*.png', '*.PNG') #all should work but only .jpg was tested
-
-        for t in types:
-            if glob.glob(f"{in_path}/{t}"):
-                f_l = glob.glob(f"{in_path}/{t}")
-                for f in f_l:
-                    files.append(f)
-    else:
-        files.append(in_path)
-
-    files.sort()
-
-    if len(files) == 0:
-        print(f"No image files found in {in_path}\n Exiting.")
-    else:
-        if num_threads is None:
-            try:
-                num_threads = len(os.sched_getaffinity(0))
-                print(f"Using {num_threads} threads.")
-            except:
-                print("Automatic thread detection didn't work. Defaulting to 1 thread only. \
-                        Please specify the correct number manually via the '-p' argument.")
-                num_threads = 1
-
-        params = []
-        for f in files:
-            params.append({"thresh": thresh,
-                            "crop": crop,
-                            "filename": f,
-                            "out_path": out_path,
-                            "black": black,
-                            "rotation": rotation,
-                            "quality": quality})
-
-        with Pool(num_threads) as p:
-            _ = p.map(autocrop, params)
 
 if __name__ == "__main__":
-    # main()
-    run_crop(input_path="pics/Sample_2_original.jpg",black_bg=True)
+    pass_args()
