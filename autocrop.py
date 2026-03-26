@@ -148,6 +148,9 @@ def cont(img, gray, user_thresh, crop, filename,target_area = 1000000):
     return len(found_images), found_images
 
 def autocrop(params):
+    # Supported extensions based on your list
+    valid_extensions = {'.bmp', '.tiff', '.tif', '.jpg', '.jpeg', '.png'}
+
     thresh = params['thresh']
     crop = params['crop']
     filename = params['filename']
@@ -157,47 +160,71 @@ def autocrop(params):
     quality = params['quality']
 
     print(f"Opening: {filename}")
-    name = Path(filename).stem # only the part after the folder
+
+    # Path handling
+    file_path = Path(filename)
+    name = file_path.stem
+    ext = file_path.suffix.lower()
+
+    # Fallback if extension is unknown or missing
+    if ext not in valid_extensions:
+        print(f"Warning: {ext} not in supported list. Defaulting to original extension.")
+
     img = cv2.imread(filename)
-    if black_bg: # invert the image if the background is black
-        img = invert(img)
+    if img is None:
+        print(f"Error: Could not read {filename}")
+        return
+
+    if black_bg:
+        img = cv2.bitwise_not(img)  # Using cv2.bitwise_not for clarity
 
     if rotation:
         img = cv2.rotate(img, rotation)
 
-    # add white background (in case one side is cropped right already, otherwise script would fail finding contours)
-    img = cv2.copyMakeBorder(img,100,100,100,100, cv2.BORDER_CONSTANT,value=[255,255,255])
-    gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+    # Add white border
+    img = cv2.copyMakeBorder(img, 100, 100, 100, 100, cv2.BORDER_CONSTANT, value=[255, 255, 255])
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
     found, found_images = cont(img, gray, thresh, crop, filename)
 
     if found:
-        for idx, img in enumerate(found_images):
-            print(f"Saving to: {out_path}/{name}-{idx}.jpg")
+        for idx, output_img in enumerate(found_images):
+            # Dynamic output path with original extension
+            out_filename = f"{name}-{idx}{ext}"
+            full_out_path = os.path.join(out_path, out_filename)
+
+            # Determine correct encoding parameters
+            write_params = []
+            if ext in ['.jpg', '.jpeg']:
+                write_params = [int(cv2.IMWRITE_JPEG_QUALITY), quality]
+            elif ext == '.png':
+                # Map 0-100 quality to 0-9 compression (OpenCV PNG scale)
+                # Lower quality = higher compression
+                png_comp = max(0, min(9, int((100 - quality) / 11)))
+                write_params = [int(cv2.IMWRITE_PNG_COMPRESSION), png_comp]
+
+            print(f"Saving to: {full_out_path}")
             try:
                 if black_bg:
-                    img = ~img
-                cv2.imwrite(f"{out_path}/{name}-{idx}.jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
-            except:
-                print(f"{out_path}/{name}-{idx}.jpg cannot be saved")
-            # TODO: this is always writing JPEG, no matter what was the input file type, can we detect this?
+                    output_img = cv2.bitwise_not(output_img)
+                cv2.imwrite(full_out_path, output_img, write_params)
+            except Exception as e:
+                print(f"{full_out_path} cannot be saved: {e}")
 
     else:
-        # if no contours were found, write input file to "failed" folder
-        print(f"Failed finding any contour. Saving original file to {out_path}/failed/{name}")
-        if not os.path.exists(f"{out_path}/failed/"):
-            os.makedirs(f"{out_path}/failed/")
+        print(f"Failed finding any contour. Saving original file to {out_path}/failed/{name}{ext}")
+        failed_dir = os.path.join(out_path, "failed")
+        if not os.path.exists(failed_dir):
+            os.makedirs(failed_dir)
 
-        with open(filename, "rb") as in_f, open(f"{out_path}/failed/{name}", "wb") as out_f:
+        # Copy original file while preserving extension
+        failed_path = os.path.join(failed_dir, f"{name}{ext}")
+        with open(filename, "rb") as in_f, open(failed_path, "wb") as out_f:
             while True:
-                buf = in_f.read(1024**2)
+                buf = in_f.read(1024 ** 2)
                 if not buf:
                     break
-                else:
-                    out_f.write(buf)
-
-def invert(img):
-    return ~img
+                out_f.write(buf)
 
 def run_crop(input_path=".", output_path="crop/",rotate=0, threshold=200, crop=0, black_bg=False,quality=92, threads=None):
     # Convert both to objects immediately
