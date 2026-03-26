@@ -5,19 +5,6 @@ import os
 from multiprocessing import Pool
 from pathlib import Path
 
-
-# main calls autocrop (via the Pool).
-#
-# autocrop calls cv2.imread (to load the image).
-#
-# autocrop calls invert (if your background is black).
-#
-# autocrop calls cont (to find the shapes).
-#
-# cont calls four_point_transform (to fix the perspective).
-#
-# four_point_transform calls order_rect (to sort the corners).
-
 def order_rect(points):
     # initialize result -> rectangle coordinates (4 corners, 2 coordinates (x,y))
     res = np.zeros((4, 2), dtype=np.float32)
@@ -148,7 +135,6 @@ def cont(img, gray, user_thresh, crop, filename,target_area = 1000000):
     return len(found_images), found_images
 
 def autocrop(params):
-    # Supported extensions based on your list
     valid_extensions = {'.bmp', '.tiff', '.tif', '.jpg', '.jpeg', '.png'}
 
     thresh = params['thresh']
@@ -199,7 +185,6 @@ def autocrop(params):
                 write_params = [int(cv2.IMWRITE_JPEG_QUALITY), quality]
             elif ext == '.png':
                 # Map 0-100 quality to 0-9 compression (OpenCV PNG scale)
-                # Lower quality = higher compression
                 png_comp = max(0, min(9, int((100 - quality) / 11)))
                 write_params = [int(cv2.IMWRITE_PNG_COMPRESSION), png_comp]
 
@@ -217,7 +202,6 @@ def autocrop(params):
         if not os.path.exists(failed_dir):
             os.makedirs(failed_dir)
 
-        # Copy original file while preserving extension
         failed_path = os.path.join(failed_dir, f"{name}{ext}")
         with open(filename, "rb") as in_f, open(failed_path, "wb") as out_f:
             while True:
@@ -265,8 +249,6 @@ def run_crop(input_path=".", output_path="crop/",rotate=0, threshold=200, crop=0
         extensions = {'.bmp', '.tiff', '.tif', '.jpg', '.jpeg', '.png'}
 
         # List comprehension:
-        # 1. Iterate over all files in the folder (folder.iterdir())
-        # 2. Check if the file's suffix (in lowercase) is in our set
         files = [str(f) for f in folder.iterdir() if f.suffix.lower() in extensions]
     else:
         files = [input_path]

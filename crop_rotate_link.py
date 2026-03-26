@@ -4,25 +4,9 @@ from pathlib import Path
 
 def run_pipeline(input_path,model_path="orientation_model_v2_0.9882.onnx"):
     print("--- Starting Crop ---")
-    autocrop.run_crop(input_path)
-
-    # path = Path(input_path)
-    # # 1. Run Crop
-    # print("--- Starting Crop ---")
-    # if path.is_file():
-    #     autocrop.main(["-s","-i", f"{path}", "-o", f"{path.parent}/crop"])
-    # else:
-    #     autocrop.main(["-i", f"{path}", "-o", f"{path}/crop"])
-    #
-    # # 2. Run Rotate
-    # print("--- Starting Rotation ---")
-    # predict_onnx.main([
-    #     "--input_path", f"{path}/crop",
-    #     "--model_path", f"{model_path}",
-    #     "--output_path", f"{path}/final_output"
-    # ])
-
+    autocrop.run_crop(input_path=input_path)
+    print("--- Starting Rotation ---")
+    predict_onnx.run_prediction_onnx(input_path=f"{input_path}/crop",output_path=f"{input_path}/rotated",model_path=model_path)
 if __name__ == "__main__":
-    # run_pipeline(input_path='pics/Scan_20260316 (2).jpg')
     run_pipeline(input_path='pics')
 

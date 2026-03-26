@@ -73,12 +73,13 @@ def predict_single_image_onnx(ort_session, image_path, image_transforms,output_p
     )
 
 
-def run_prediction_onnx(args):
+def run_prediction_onnx(input_path, output_path="rotated",model_path=os.path.join(config.MODEL_SAVE_DIR, f"{config.MODEL_NAME}.onnx")):
     """Main ONNX prediction routine."""
     setup_logging()
 
-    if not os.path.exists(args.model_path):
-        logging.error(f"ONNX model file not found at {args.model_path}.")
+
+    if not os.path.exists(model_path):
+        logging.error(f"ONNX model file not found at {model_path}.")
         return
 
     # Define the same transformations used during validation.
@@ -123,12 +124,12 @@ def run_prediction_onnx(args):
 
         # Load the ONNX model with the single, highest-priority available provider
         ort_session = onnxruntime.InferenceSession(
-            args.model_path, providers=[chosen_provider]
+            model_path, providers=[chosen_provider]
         )
 
         actual_provider = ort_session.get_providers()[0]
         logging.info(
-            f"Successfully loaded ONNX model from {args.model_path} using provider: {actual_provider}"
+            f"Successfully loaded ONNX model from {model_path} using provider: {actual_provider}"
         )
 
         if (
@@ -140,21 +141,21 @@ def run_prediction_onnx(args):
             )
 
     except Exception as e:
-        logging.error(f"Error loading ONNX model {args.model_path}: {e}")
+        logging.error(f"Error loading ONNX model {model_path}: {e}")
         logging.error(
             "If you are trying to use a GPU provider (CUDA, TensorRT, ROCm, MPS), "
             "please ensure the correct onnxruntime package is installed and drivers are up to date."
         )
         return
 
-    input_path = args.input_path
+    input_path = input_path
     if not os.path.exists(input_path):
         logging.error(f"Input path does not exist: {input_path}")
         return
 
     if os.path.isfile(input_path):
         print(f"Processing single image: {input_path}")
-        predict_single_image_onnx(ort_session, input_path, image_transforms,args.output_path)
+        predict_single_image_onnx(ort_session, input_path, image_transforms,output_path)
     elif os.path.isdir(input_path):
         print(f"Processing all images in directory: {input_path}")
         total_dir_start_time = time.time()  # Start timer for the entire directory
@@ -170,7 +171,7 @@ def run_prediction_onnx(args):
 
         for image_file in image_files:
             full_path = os.path.join(input_path, image_file)
-            predict_single_image_onnx(ort_session, full_path, image_transforms,args.output_path)
+            predict_single_image_onnx(ort_session, full_path, image_transforms,output_path)
 
         total_dir_end_time = time.time()  # End timer
         total_duration = total_dir_end_time - total_dir_start_time
@@ -208,7 +209,7 @@ def main(args_list=None):  # <--- 1. Wrap it in a function with the 'valve'
     args = parser.parse_args(args_list)
 
     # 3. Call the existing logic
-    run_prediction_onnx(args)
+    run_prediction_onnx(input_path = args.input_path,output_path = args.output_path,model_path = args.model_path)
 
 
 if __name__ == "__main__":
