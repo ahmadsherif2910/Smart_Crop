@@ -2,7 +2,8 @@
 !.gitignore
 !autocrop.py
 !crop_rotate_link.py
-!ctk.py
+!app.py
+!folder_watch.py
 !orientation_model_v2_0.9882.onnx
 !orientation_detection/
 orientation_detection/*

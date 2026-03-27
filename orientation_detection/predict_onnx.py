@@ -4,7 +4,6 @@ import argparse
 import logging
 import time
 import onnxruntime
-import numpy as np
 from PIL import Image
 
 from . import config
@@ -148,7 +147,6 @@ def run_prediction_onnx(input_path, output_path="rotated",model_path=os.path.joi
         )
         return
 
-    input_path = input_path
     if not os.path.exists(input_path):
         logging.error(f"Input path does not exist: {input_path}")
         return
@@ -162,7 +160,7 @@ def run_prediction_onnx(input_path, output_path="rotated",model_path=os.path.joi
         image_files = [
             f
             for f in os.listdir(input_path)
-            if f.lower().endswith((".png", ".jpg", ".jpeg"))
+            if f.lower().endswith(('.bmp', '.tiff', '.tif', '.jpg', '.jpeg', '.png'))
         ]
 
         if not image_files:
